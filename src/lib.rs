@@ -11,10 +11,10 @@ mod typestates;
 pub struct Hal {
     pub gpio0: gpio::gpio0::GPIO0,
     pub gpio1: gpio::gpio1::GPIO1,
-    pub gpio2: gpio::gpio1::GPIO2,
-    pub gpio3: gpio::gpio1::GPIO3,
-    pub gpio4: gpio::gpio1::GPIO4,
-    pub gpio5: gpio::gpio1::GPIO5,
+    pub gpio2: gpio::gpio2::GPIO2,
+    pub gpio3: gpio::gpio3::GPIO3,
+    pub gpio4: gpio::gpio4::GPIO4,
+    pub gpio5: gpio::gpio5::GPIO5,
 }
 
 impl Hal {
@@ -23,10 +23,10 @@ impl Hal {
         Hal {
             gpio0: gpio::gpio0::GPIO0::new(),
             gpio1: gpio::gpio1::GPIO1::new(),
-            gpio2: gpio::gpio1::GPIO1::new(),
-            gpio3: gpio::gpio1::GPIO1::new(),
-            gpio4: gpio::gpio1::GPIO1::new(),
-            gpio5: gpio::gpio1::GPIO1::new(),
+            gpio2: gpio::gpio2::GPIO2::new(),
+            gpio3: gpio::gpio3::GPIO3::new(),
+            gpio4: gpio::gpio4::GPIO4::new(),
+            gpio5: gpio::gpio5::GPIO5::new(),
         }
     }
 }
