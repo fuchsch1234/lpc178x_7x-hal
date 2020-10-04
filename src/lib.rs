@@ -5,10 +5,12 @@ pub use nb as nb;
 pub use embedded_hal::digital::*;
 use crate::typestates::Disabled;
 
+pub mod clock;
 pub mod gpio;
 mod typestates;
 
 pub struct Hal {
+    pub clock: clock::Clock<Disabled>,
     pub gpio0: gpio::gpio0::GPIO0,
     pub gpio1: gpio::gpio1::GPIO1,
     pub gpio2: gpio::gpio2::GPIO2,
@@ -21,6 +23,7 @@ impl Hal {
     pub fn new() -> Hal {
         let _peripherals = pac::Peripherals::take().unwrap();
         Hal {
+            clock: clock::Clock::<Disabled>::new(),
             gpio0: gpio::gpio0::GPIO0::new(),
             gpio1: gpio::gpio1::GPIO1::new(),
             gpio2: gpio::gpio2::GPIO2::new(),

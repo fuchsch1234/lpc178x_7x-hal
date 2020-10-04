@@ -12,6 +12,7 @@ WIP!
 
 Implemented peripherals:
 
+* Clock
 * GPIO
 
 ## PAC
