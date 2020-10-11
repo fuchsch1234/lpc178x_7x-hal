@@ -10,3 +10,7 @@ addons:
 
 install:
   - rustup target add thumbv7m-none-eabi
+
+script:
+  - cargo build --verbose
+  - cargo build --verbose --examples
