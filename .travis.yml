@@ -1,0 +1,12 @@
+language: rust
+
+rust:
+  - stable
+
+addons:
+  apt:
+    packages:
+      - gcc-arm-none-eabi
+
+install:
+  - rustup target add thumbv7m-none-eabi

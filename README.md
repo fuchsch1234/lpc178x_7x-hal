@@ -1,5 +1,6 @@
 # LPC178x/7x HAL (hardware abstraction layer)
 
+[![Build Status](https://travis-ci.org/fuchsch1234/lpc178x_7x-hal.svg?branch=master)](https://travis-ci.org/fuchsch1234/lpc178x_7x-hal)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 ![version](https://img.shields.io/badge/version-0.1.0-blue)
 
