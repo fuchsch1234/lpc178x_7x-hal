@@ -11,6 +11,8 @@ use lpc178x_7x_hal::*;
 fn main() -> ! {
     let hal = Hal::new();
     let _clock = hal.clock.enable(120_000_000, 12_000_000);
-    hprintln!("[OK]");
+    if let Err(_) = hprintln!("[OK]") {
+
+    }
     loop {}
 }
