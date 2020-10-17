@@ -9,6 +9,7 @@ use crate::typestates::{
 
 pub struct Clock<State: InitState> {
     _state: PhantomData<State>,
+    cpu_freq: i32,
 }
 
 impl<State> Clock<State>
@@ -17,7 +18,7 @@ where
 {
 
     pub fn new() -> Clock<Disabled> {
-        Clock{ _state: PhantomData }
+        Clock{ _state: PhantomData, cpu_freq: 0 }
     }
 
 }
@@ -69,15 +70,15 @@ impl Clock<Disabled> {
             syscon.flashcfg.write(|w| w.bits(0x403A));
         }
 
-        Clock { _state: PhantomData }
+        Clock { _state: PhantomData, cpu_freq }
     }
 
 }
 
 impl Clock<Enabled> {
 
-    pub fn get_frequency(&self) -> u32 {
-        120_000_000
+    pub fn get_frequency(&self) -> i32 {
+        self.cpu_freq
     }
 
 }
