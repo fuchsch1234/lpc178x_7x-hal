@@ -24,21 +24,19 @@ where
 
 impl Clock<Disabled> {
 
-    fn compute_pllp(cpu_freq: u32) -> u8 {
-        const FCCO_MIN: u32= 156_000_000;
-        const FCCO_MAX: u32 = 320_000_000;
-        let mut i = 1;
-        while i <= 8 {
-            let fcco = cpu_freq * 2 * i;
+    fn compute_pllp(cpu_freq: i32) -> u8 {
+        const FCCO_MIN: i32= 156_000_000;
+        const FCCO_MAX: i32 = 320_000_000;
+        for p in 0u8..3 {
+            let fcco = cpu_freq * 2 * 2i32.pow(p as u32);
             if fcco >= FCCO_MIN && fcco <= FCCO_MAX {
-                return i as u8;
+                return p;
             }
-            i = i << 1;
         }
-        return 2;
+        return 0;
     }
 
-    pub fn enable(self, cpu_freq: u32, crystal_freq: u32) -> Clock<Enabled> {
+    pub fn enable(self, cpu_freq: i32, crystal_freq: i32) -> Clock<Enabled> {
         let m: u8 = ((cpu_freq / crystal_freq) - 1).try_into().unwrap();
         let p: u8 = Clock::<Disabled>::compute_pllp(cpu_freq);
         let syscon = unsafe { &(*pac::SYSCON::ptr()) };
