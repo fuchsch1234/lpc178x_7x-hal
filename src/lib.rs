@@ -19,11 +19,11 @@ pub struct Hal {
     pub gpio3: gpio::gpio3::GPIO3,
     pub gpio4: gpio::gpio4::GPIO4,
     pub gpio5: gpio::gpio5::GPIO5,
-    pub uart0: uart::Uart0,
-    pub uart1: uart::Uart1,
-    pub uart2: uart::Uart2,
-    pub uart3: uart::Uart3,
-    pub uart4: uart::Uart4,
+    pub uart0: uart::Uart0<Disabled>,
+    pub uart1: uart::Uart1<Disabled>,
+    pub uart2: uart::Uart2<Disabled>,
+    pub uart3: uart::Uart3<Disabled>,
+    pub uart4: uart::Uart4<Disabled>,
 }
 
 impl Hal {

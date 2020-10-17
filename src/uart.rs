@@ -23,23 +23,36 @@ pub trait UartTx {
     fn into_uarttx(&self);
 }
 /// Marker trait for different UART Hal types that wrap each UART hardware.
-pub trait Uart{}
+pub trait Uart {
+
+    fn can_read(&self) -> bool;
+
+    fn read(&mut self) -> u8;
+
+    fn flush(&mut self) -> bool;
+
+    fn write(&mut self, data: u8);
+
+}
 
 macro_rules! uarts {
-    ($(($type: ident, $hardware: ident)),* $(,)?) => {
+    ($(($type: ident, $hardware: ident, $pcon: ident)),* $(,)?) => {
         $(
             #[doc="A HAL wrapper for UART hardware $hardware"]
-            pub struct $type {
+            pub struct $type<S: InitState> {
+                _state: PhantomData<S>,
                 _uart: $hardware,
             }
 
-            impl From<$hardware> for $type {
+            impl From<$hardware> for $type<Disabled> {
                 fn from(uart: $hardware) -> Self {
-                    $type{ _uart: uart }
+                    $type{ _state: PhantomData, _uart: uart }
                 }
             }
 
-            impl $type {
+            impl<S> $type<S>
+             where S: InitState
+             {
                 #[allow(dead_code)]
                 /// Releases the HAL wrapper and returns the wrapped hardware.
                 /// Consumes the HAL wrapper.
@@ -52,17 +65,71 @@ macro_rules! uarts {
                 }
             }
 
-            impl Uart for $type {}
+            impl $type<Disabled> {
+
+                /// Sets up the UART hardware for use as a serial line.
+                ///
+                /// # Arguments
+                ///
+                /// * baudrate - The baudrate for the UART.
+                /// * clock - Enabled CPU clock component.
+                ///
+                /// # Example
+                /// ```
+                /// let hal = crate::Hal::new();
+                /// let clock = hal.clock.enable(120_000_000, 12_000_000);
+                /// let pins = hal.gpio0.split();
+                /// let tx = pins.p0_2;
+                /// let rx = pins.p0_3;
+                /// let uart = hal.uart0.enable();
+                /// let mut uart = uart::Serial::new(hal.uart0, (rx, tx).into()).enable(&clock);
+                /// ```
+                pub fn enable(self) -> $type<Enabled> {
+                    unsafe { (*crate::pac::SYSCON::ptr()).pconp.write(|w| w.$pcon().set_bit()); };
+
+                    self._uart.fcr().write(|w| w.fifoen().set_bit());
+                    self._uart.lcr.write(|w| w.wls()._8_bit_character_leng().dlab().set_bit());
+                    unsafe {
+                        self._uart.dlm_mut().write(|w| w.bits(0));
+                        self._uart.dll_mut().write(|w| w.bits(34));
+                        self._uart.fdr.write(|w| w.mulval().bits(15).divaddval().bits(8));
+                    }
+
+                    self._uart.lcr.modify(|_, w| w.dlab().clear_bit());
+                    $type::<Enabled> { _state: PhantomData, _uart: self._uart }
+                }
+
+            }
+
+            impl Uart for $type<Enabled> {
+
+                fn can_read(&self) -> bool {
+                    self._uart.lsr.read().rdr().bit()
+                }
+
+                fn read(&mut self) -> u8 {
+                    self._uart.rbr().read().rbr().bits()
+                }
+
+                fn flush(&mut self) -> bool {
+                    self._uart.lsr.read().thre().bit()
+                }
+
+                fn write(&mut self, data: u8) {
+                    unsafe { self._uart.thr().write(|w| w.thr().bits(data)); }
+                }
+
+            }
         )*
     }
 }
 
 uarts!(
-    (Uart0, UART0),
-    (Uart1, UART1),
-    (Uart2, UART2),
-    (Uart3, UART3),
-    (Uart4, UART4),
+    (Uart0, UART0, pcuart0),
+    (Uart1, UART1, pcuart1),
+    (Uart2, UART2, pcuart2),
+    (Uart3, UART3, pcuart3),
+    (Uart4, UART4, pcuart4),
 );
 
 pub struct UartPins<RX: UartRx, TX: UartTx> {
@@ -92,49 +159,25 @@ where
     }
 }
 
-pub struct Serial<Init: InitState, UART: Uart, RX: UartRx, TX: UartTx> {
-    _state: PhantomData<Init>,
+pub struct Serial<UART: Uart, RX: UartRx, TX: UartTx> {
     _uart: UART,
     _rx: RX,
     _tx: TX,
 }
 
-impl<State, UART, RX, TX> Serial<State, UART, RX, TX>
-where
-    State: InitState,
-    UART: Uart,
-    RX: UartRx,
-    TX: UartTx,
-{
-
-    pub fn free(self) -> (UART, RX, TX) {
-        (self._uart, self._rx, self._tx)
-    }
-
-}
-
-impl<UART, RX, TX> Serial<Disabled, UART, RX, TX>
+impl<UART, RX, TX> Serial<UART, RX, TX>
 where
     UART: Uart,
     RX: UartRx,
     TX: UartTx,
 {
 
-    pub fn new(uart: UART, pins: UartPins<RX, TX>) -> Serial<Disabled, UART, RX, TX> {
-        Serial{
-            _state: PhantomData,
-            _uart: uart,
-            _rx: pins.rx,
-            _tx: pins.tx,
-        }
-    }
-
-    /// Sets up the UART hardware for use as a serial line.
+    /// Create a new serial line terminal.
     ///
     /// # Arguments
     ///
-    /// * baudrate - The baudrate for the serial line.
-    /// * clock - Enabled CPU clock component.
+    /// * uart - A UART that shall be used to transmit and receive data.
+    /// * pins - Pair of RX/TX pins used for the UART.
     ///
     /// # Example
     /// ```
@@ -143,36 +186,24 @@ where
     /// let pins = hal.gpio0.split();
     /// let tx = pins.p0_2;
     /// let rx = pins.p0_3;
-    /// let mut uart = uart::Serial::new(hal.uart0, (rx, tx).into()).enable(&clock);
+    /// let uart = hal.uart0.enable();
+    /// let mut uart = uart::Serial::new(uart, (rx, tx).into());
     /// ```
-    pub fn enable(self, _clock: &clock::Clock<Enabled>) -> Serial<Enabled, UART, RX, TX> {
-
-        let uart = unsafe {
-            (*crate::pac::SYSCON::ptr()).pconp.write(|w| w.pcuart0().set_bit());
-            &(*crate::pac::UART0::ptr())
-        };
-
-        uart.fcr().write(|w| w.fifoen().set_bit());
-        uart.lcr.write(|w| w.wls()._8_bit_character_leng().dlab().set_bit());
-        unsafe {
-            uart.dlm_mut().write(|w| w.bits(2));
-            uart.dll_mut().write(|w| w.bits(8));
-            uart.fdr.write(|w| w.mulval().bits(2).divaddval().bits(1));
+    pub fn new(uart: UART, pins: UartPins<RX, TX>) -> Serial<UART, RX, TX> {
+        Serial {
+            _uart: uart,
+            _rx: pins.rx,
+            _tx: pins.tx,
         }
+    }
 
-        uart.lcr.modify(|_, w| w.dlab().clear_bit());
-
-        Serial{
-            _state: PhantomData,
-            _uart: self._uart,
-            _rx: self._rx,
-            _tx: self._tx
-        }
+    pub fn free(self) -> (UART, RX, TX) {
+        (self._uart, self._rx, self._tx)
     }
 
 }
 
-impl<UART, RX, TX> Read<u8> for Serial<Enabled, UART, RX, TX>
+impl<UART, RX, TX> Read<u8> for Serial<UART, RX, TX>
 where
     UART: Uart,
     RX: UartRx,
@@ -181,17 +212,15 @@ where
     type Error = ();
 
     fn try_read(&mut self) -> Result<u8, nb::Error<()>> {
-        if unsafe { (*crate::pac::UART0::ptr()).lsr.read().rdr().bit() } {
-            unsafe {
-                Ok((*crate::pac::UART0::ptr()).rbr().read().rbr().bits())
-            }
+        if self._uart.can_read() {
+            Ok(self._uart.read())
         } else {
             Err(WouldBlock)
         }
     }
 }
 
-impl<UART, RX, TX> Write<u8> for Serial<Enabled, UART, RX, TX>
+impl<UART, RX, TX> Write<u8> for Serial<UART, RX, TX>
 where
     UART: Uart,
     RX: UartRx,
@@ -200,14 +229,12 @@ where
     type Error = ();
 
     fn try_write(&mut self, word: u8) -> Result<(), nb::Error<()>> {
-        unsafe {
-            (*crate::pac::UART0::ptr()).thr().write(|w| w.thr().bits(word));
-        }
+        self._uart.write(word);
         Ok(())
     }
 
     fn try_flush(&mut self) -> Result<(), nb::Error<()>> {
-        if unsafe { (*crate::pac::UART0::ptr()).lsr.read().thre().bit() } {
+        if self._uart.flush() {
             Ok(())
         } else {
             Err(WouldBlock)
