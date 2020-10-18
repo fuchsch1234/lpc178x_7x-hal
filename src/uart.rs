@@ -115,8 +115,12 @@ macro_rules! uarts {
                 type Error = ();
 
                 fn try_write(&mut self, data: u8) -> Result<(), nb::Error<()>> {
-                    unsafe { self._uart.thr().write(|w| w.thr().bits(data)); }
-                    Ok(())
+                    if self._uart.lsr.read().thre().bit() {
+                        unsafe { self._uart.thr().write(|w| w.thr().bits(data)); }
+                        Ok(())
+                    } else {
+                        Err(WouldBlock)
+                    }
                 }
 
                 fn try_flush(&mut self) -> Result<(), nb::Error<()>> {
