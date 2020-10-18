@@ -1,9 +1,9 @@
 #![no_main]
 #![no_std]
 
-use panic_halt as _;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::hprintln;
+use panic_halt as _;
 
 use lpc178x_7x_hal::*;
 
@@ -25,8 +25,11 @@ fn main() -> ! {
                 } else {
                     hprintln!("[Fail]: Wrote '!' but received '{}'", byte);
                 }
-            },
-            Err(_) => { hprintln!("[Fail]: Reading failed"); () }
+            }
+            Err(_) => {
+                hprintln!("[Fail]: Reading failed");
+                ()
+            }
         }
     } else {
         hprintln!("[Fail]: Writing failed");

@@ -1,24 +1,21 @@
-use crate::gpio;
 use crate::clock;
-use crate::typestates::{
-    InitState,
-    Enabled,
-    Disabled,
-    PinState,
-};
+use crate::gpio;
+use crate::typestates::{Disabled, Enabled, InitState, PinState};
 use core::convert::From;
 use core::fmt;
 use core::marker::PhantomData;
 
 use embedded_hal::serial::{Read, Write};
 
-use crate::pac::{
-    UART0, UART1, UART2, UART3, UART4
-};
+use crate::pac::{UART0, UART1, UART2, UART3, UART4};
 use nb::Error::WouldBlock;
 
-pub trait UartRx<UART> { fn into_uartrx(&self); }
-pub trait UartTx<UART> { fn into_uarttx(&self); }
+pub trait UartRx<UART> {
+    fn into_uartrx(&self);
+}
+pub trait UartTx<UART> {
+    fn into_uarttx(&self);
+}
 
 macro_rules! uarts {
     ($(($type: ident, $rx: ident, $tx: ident, $hardware: ident, $pcon: ident)),* $(,)?) => {

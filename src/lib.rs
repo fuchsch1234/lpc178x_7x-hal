@@ -1,15 +1,15 @@
 #![no_std]
 
-pub use lpc178x_7x as pac;
-pub use nb as nb;
+use crate::typestates::Disabled;
 pub use embedded_hal::digital::*;
 pub use embedded_hal::serial::*;
-use crate::typestates::Disabled;
+pub use lpc178x_7x as pac;
+pub use nb;
 
 pub mod clock;
 pub mod gpio;
-pub mod uart;
 mod typestates;
+pub mod uart;
 
 pub struct Hal {
     pub clock: clock::Clock<Disabled>,

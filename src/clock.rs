@@ -1,11 +1,7 @@
+use crate::pac;
+use crate::typestates::{Disabled, Enabled, InitState};
 use core::convert::TryInto;
 use core::marker::PhantomData;
-use crate::pac;
-use crate::typestates::{
-    Disabled,
-    Enabled,
-    InitState,
-};
 
 pub struct Clock<State: InitState> {
     _state: PhantomData<State>,
@@ -14,19 +10,19 @@ pub struct Clock<State: InitState> {
 
 impl<State> Clock<State>
 where
-    State: InitState
+    State: InitState,
 {
-
     pub fn new() -> Clock<Disabled> {
-        Clock{ _state: PhantomData, cpu_freq: 0 }
+        Clock {
+            _state: PhantomData,
+            cpu_freq: 0,
+        }
     }
-
 }
 
 impl Clock<Disabled> {
-
     fn compute_pllp(cpu_freq: i32) -> u8 {
-        const FCCO_MIN: i32= 156_000_000;
+        const FCCO_MIN: i32 = 156_000_000;
         const FCCO_MAX: i32 = 320_000_000;
         for p in 0u8..3 {
             let fcco = cpu_freq * 2 * 2i32.pow(p as u32);
@@ -60,7 +56,9 @@ impl Clock<Disabled> {
         unsafe {
             let divider = 1;
             // Setup clock divider
-            syscon.cclksel.write(|w| w.cclksel().set_bit().cclkdiv().bits(divider));
+            syscon
+                .cclksel
+                .write(|w| w.cclksel().set_bit().cclkdiv().bits(divider));
             // Setup peripheral clock divider
             syscon.pclksel.write(|w| w.bits(divider as u32));
 
@@ -70,15 +68,15 @@ impl Clock<Disabled> {
             syscon.flashcfg.write(|w| w.bits(0x403A));
         }
 
-        Clock { _state: PhantomData, cpu_freq }
+        Clock {
+            _state: PhantomData,
+            cpu_freq,
+        }
     }
-
 }
 
 impl Clock<Enabled> {
-
     pub fn get_frequency(&self) -> i32 {
         self.cpu_freq
     }
-
 }
