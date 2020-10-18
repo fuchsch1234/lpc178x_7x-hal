@@ -74,6 +74,9 @@ macro_rules! uarts {
                 {
                     unsafe { (*crate::pac::SYSCON::ptr()).pconp.write(|w| w.$pcon().set_bit()); };
 
+                    rx.into_uartrx();
+                    tx.into_uarttx();
+
                     self._uart.fcr().write(|w| w.fifoen().set_bit());
                     self._uart.lcr.write(|w| w.wls()._8_bit_character_leng().dlab().set_bit());
                     unsafe {
