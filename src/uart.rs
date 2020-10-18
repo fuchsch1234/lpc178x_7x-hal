@@ -7,6 +7,7 @@ use crate::typestates::{
     PinState,
 };
 use core::convert::From;
+use core::fmt;
 use core::marker::PhantomData;
 
 use embedded_hal::serial::{Read, Write};
@@ -16,43 +17,30 @@ use crate::pac::{
 };
 use nb::Error::WouldBlock;
 
-pub trait UartRx {
-    fn into_uartrx(&self);
-}
-pub trait UartTx {
-    fn into_uarttx(&self);
-}
-/// Marker trait for different UART Hal types that wrap each UART hardware.
-pub trait Uart {
-
-    fn can_read(&self) -> bool;
-
-    fn read(&mut self) -> u8;
-
-    fn flush(&mut self) -> bool;
-
-    fn write(&mut self, data: u8);
-
-}
+pub trait UartRx<UART> { fn into_uartrx(&self); }
+pub trait UartTx<UART> { fn into_uarttx(&self); }
 
 macro_rules! uarts {
-    ($(($type: ident, $hardware: ident, $pcon: ident)),* $(,)?) => {
+    ($(($type: ident, $rx: ident, $tx: ident, $hardware: ident, $pcon: ident)),* $(,)?) => {
         $(
+
             #[doc="A HAL wrapper for UART hardware $hardware"]
-            pub struct $type<S: InitState> {
+            pub struct $type<S: InitState, Rx = (), Tx = ()> {
                 _state: PhantomData<S>,
                 _uart: $hardware,
+                _rx: Rx,
+                _tx: Tx,
             }
 
-            impl From<$hardware> for $type<Disabled> {
+            impl From<$hardware> for $type<Disabled>
+            {
                 fn from(uart: $hardware) -> Self {
-                    $type{ _state: PhantomData, _uart: uart }
+                    $type{ _state: PhantomData, _uart: uart, _rx: (), _tx: () }
                 }
             }
 
-            impl<S> $type<S>
-             where S: InitState
-             {
+            impl $type<Disabled>
+            {
                 #[allow(dead_code)]
                 /// Releases the HAL wrapper and returns the wrapped hardware.
                 /// Consumes the HAL wrapper.
@@ -63,14 +51,13 @@ macro_rules! uarts {
                 fn free(self) -> $hardware {
                     self._uart
                 }
-            }
-
-            impl $type<Disabled> {
 
                 /// Sets up the UART hardware for use as a serial line.
                 ///
                 /// # Arguments
                 ///
+                /// * rx - A pin implementing the matching UartXRx trait, that can be used for Rx.
+                /// * tx - A pin implementing the matching UartXTx trait, that can be used for Tx.
                 /// * baudrate - The baudrate for the UART.
                 /// * clock - Enabled CPU clock component.
                 ///
@@ -81,10 +68,13 @@ macro_rules! uarts {
                 /// let pins = hal.gpio0.split();
                 /// let tx = pins.p0_2;
                 /// let rx = pins.p0_3;
-                /// let uart = hal.uart0.enable();
-                /// let mut uart = uart::Serial::new(hal.uart0, (rx, tx).into()).enable(&clock);
+                /// let uart = hal.uart0.enable(rx, tx);
                 /// ```
-                pub fn enable(self) -> $type<Enabled> {
+                pub fn enable<Rx, Tx>(self, rx: Rx, tx: Tx) -> $type<Enabled, Rx, Tx>
+                where
+                    Rx: UartRx<$type<Enabled, Rx, Tx>>,
+                    Tx: UartTx<$type<Enabled, Rx, Tx>>,
+                {
                     unsafe { (*crate::pac::SYSCON::ptr()).pconp.write(|w| w.$pcon().set_bit()); };
 
                     self._uart.fcr().write(|w| w.fifoen().set_bit());
@@ -96,156 +86,82 @@ macro_rules! uarts {
                     }
 
                     self._uart.lcr.modify(|_, w| w.dlab().clear_bit());
-                    $type::<Enabled> { _state: PhantomData, _uart: self._uart }
+                    $type::<Enabled, Rx, Tx> { _state: PhantomData, _uart: self._uart, _rx: rx, _tx: tx }
                 }
 
             }
 
-            impl Uart for $type<Enabled> {
+            impl<Rx, Tx> Read<u8> for $type<Enabled, Rx, Tx>
+            where
+                Rx: UartRx<$type<Enabled, Rx, Tx>>,
+                Tx: UartTx<$type<Enabled, Rx, Tx>>,
+            {
+                type Error = ();
 
-                fn can_read(&self) -> bool {
-                    self._uart.lsr.read().rdr().bit()
+                fn try_read(&mut self) -> Result<u8, nb::Error<()>> {
+                    if self._uart.lsr.read().rdr().bit() {
+                        Ok(self._uart.rbr().read().rbr().bits())
+                    } else {
+                        Err(WouldBlock)
+                    }
                 }
+            }
 
-                fn read(&mut self) -> u8 {
-                    self._uart.rbr().read().rbr().bits()
-                }
+            impl<Rx, Tx> Write<u8> for $type<Enabled, Rx, Tx>
+            where
+                Rx: UartRx<$type<Enabled, Rx, Tx>>,
+                Tx: UartTx<$type<Enabled, Rx, Tx>>,
+            {
+                type Error = ();
 
-                fn flush(&mut self) -> bool {
-                    self._uart.lsr.read().thre().bit()
-                }
-
-                fn write(&mut self, data: u8) {
+                fn try_write(&mut self, data: u8) -> Result<(), nb::Error<()>> {
                     unsafe { self._uart.thr().write(|w| w.thr().bits(data)); }
+                    Ok(())
                 }
 
+                fn try_flush(&mut self) -> Result<(), nb::Error<()>> {
+                    if self._uart.lsr.read().thre().bit() {
+                        Ok(())
+                    } else {
+                        Err(WouldBlock)
+                    }
+                }
+            }
+
+            impl<Rx, Tx> fmt::Write for $type<Enabled, Rx, Tx>
+            where
+                Rx: UartRx<$type<Enabled, Rx, Tx>>,
+                Tx: UartTx<$type<Enabled, Rx, Tx>>,
+            {
+                fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
+                    let _ = s
+                        .as_bytes()
+                        .into_iter()
+                        .map(|c| nb::block!(self.try_write(*c)))
+                        .last();
+                    Ok(())
+                }
             }
         )*
     }
 }
 
 uarts!(
-    (Uart0, UART0, pcuart0),
-    (Uart1, UART1, pcuart1),
-    (Uart2, UART2, pcuart2),
-    (Uart3, UART3, pcuart3),
-    (Uart4, UART4, pcuart4),
+    (Uart0, Uart0Rx, Uart0Tx, UART0, pcuart0),
+    (Uart1, Uart1Rx, Uart1Tx, UART1, pcuart1),
+    (Uart2, Uart2Rx, Uart2Tx, UART2, pcuart2),
+    (Uart3, Uart3Rx, Uart3Tx, UART3, pcuart3),
+    (Uart4, Uart4Rx, Uart4Tx, UART4, pcuart4),
 );
 
-pub struct UartPins<RX: UartRx, TX: UartTx> {
-    rx: RX,
-    tx: TX,
-}
-
-impl<RX, TX> From<(RX, TX)> for UartPins<RX, TX>
-where
-    RX: UartRx,
-    TX: UartTx,
-{
-    fn from(pins: (RX, TX)) -> Self {
-        pins.0.into_uartrx();
-        pins.1.into_uarttx();
-        UartPins::<RX, TX>{ rx: pins.0, tx: pins.1 }
-    }
-}
-
-impl<RX, TX> UartPins<RX, TX>
-where
-    RX: UartRx,
-    TX: UartTx,
-{
-    pub fn free(self) -> (RX, TX) {
-        (self.rx, self.tx)
-    }
-}
-
-pub struct Serial<UART: Uart, RX: UartRx, TX: UartTx> {
-    _uart: UART,
-    _rx: RX,
-    _tx: TX,
-}
-
-impl<UART, RX, TX> Serial<UART, RX, TX>
-where
-    UART: Uart,
-    RX: UartRx,
-    TX: UartTx,
-{
-
-    /// Create a new serial line terminal.
-    ///
-    /// # Arguments
-    ///
-    /// * uart - A UART that shall be used to transmit and receive data.
-    /// * pins - Pair of RX/TX pins used for the UART.
-    ///
-    /// # Example
-    /// ```
-    /// let hal = crate::Hal::new();
-    /// let clock = hal.clock.enable(120_000_000, 12_000_000);
-    /// let pins = hal.gpio0.split();
-    /// let tx = pins.p0_2;
-    /// let rx = pins.p0_3;
-    /// let uart = hal.uart0.enable();
-    /// let mut uart = uart::Serial::new(uart, (rx, tx).into());
-    /// ```
-    pub fn new(uart: UART, pins: UartPins<RX, TX>) -> Serial<UART, RX, TX> {
-        Serial {
-            _uart: uart,
-            _rx: pins.rx,
-            _tx: pins.tx,
-        }
-    }
-
-    pub fn free(self) -> (UART, RX, TX) {
-        (self._uart, self._rx, self._tx)
-    }
-
-}
-
-impl<UART, RX, TX> Read<u8> for Serial<UART, RX, TX>
-where
-    UART: Uart,
-    RX: UartRx,
-    TX: UartTx,
-{
-    type Error = ();
-
-    fn try_read(&mut self) -> Result<u8, nb::Error<()>> {
-        if self._uart.can_read() {
-            Ok(self._uart.read())
-        } else {
-            Err(WouldBlock)
-        }
-    }
-}
-
-impl<UART, RX, TX> Write<u8> for Serial<UART, RX, TX>
-where
-    UART: Uart,
-    RX: UartRx,
-    TX: UartTx,
-{
-    type Error = ();
-
-    fn try_write(&mut self, word: u8) -> Result<(), nb::Error<()>> {
-        self._uart.write(word);
-        Ok(())
-    }
-
-    fn try_flush(&mut self) -> Result<(), nb::Error<()>> {
-        if self._uart.flush() {
-            Ok(())
-        } else {
-            Err(WouldBlock)
-        }
-    }
-}
-
 macro_rules! uart_rx {
-($(($pin: ident, $io: ident, $func: ident)),* $(,)?) => {
+($(($pin: ident, $io: ident, $type: ident, $func: ident)),* $(,)?) => {
     $(
-        impl<T> UartRx for gpio::$pin<T> where T: PinState {
+        impl<T, S, Rx, Tx> UartRx<$type<S, Rx, Tx>> for gpio::$pin<T>
+        where
+            T: PinState,
+            S: InitState,
+        {
             fn into_uartrx(&self) {
                 unsafe {
                     (*crate::pac::IOCON::ptr()).$io.write(|w| w.func().$func());
@@ -257,9 +173,13 @@ macro_rules! uart_rx {
 }
 
 macro_rules! uart_tx {
-($(($pin: ident, $io: ident, $func: ident)),* $(,)?) => {
+($(($pin: ident, $io: ident, $type: ident, $func: ident)),* $(,)?) => {
     $(
-        impl<T> UartTx for gpio::$pin<T> where T: PinState {
+        impl<T, S, Rx, Tx> UartTx<$type<S, Rx, Tx>> for gpio::$pin<T>
+        where
+            T: PinState,
+            S: InitState,
+        {
             fn into_uarttx(&self) {
                 unsafe {
                     (*crate::pac::IOCON::ptr()).$io.write(|w| w.func().$func());
@@ -271,36 +191,36 @@ macro_rules! uart_tx {
 }
 
 uart_rx!(
-    (P0_1, p0_1, u0_rxd),
-    // (P0_1, p0_1, u3_rxd),
-    (P0_3, p0_3, u0_rxd),
-    // (P0_3, p0_3, u3_rxd),
-    (P0_11, p0_11, u2_rxd),
-    (P0_16, p0_16, u1_rxd),
-    (P0_26, p0_26, u3_rxd),
-    (P2_1, p2_1, u1_rxd),
-    (P2_9, p2_9, u2_rxd),
-    // (P2_9, p2_9, u4_rxd),
-    (P3_17, p3_17, u1_rxd),
-    (P4_23, p4_23, u2_rxd),
-    (P4_29, p4_29, u3_rxd),
-    (P5_3, p5_3, u4_rxd),
+    (P0_1, p0_1, Uart0, u0_rxd),
+    (P0_1, p0_1, Uart3, u3_rxd),
+    (P0_3, p0_3, Uart0, u0_rxd),
+    (P0_3, p0_3, Uart3, u3_rxd),
+    (P0_11, p0_11, Uart2, u2_rxd),
+    (P0_16, p0_16, Uart1, u1_rxd),
+    (P0_26, p0_26, Uart3, u3_rxd),
+    (P2_1, p2_1, Uart1, u1_rxd),
+    (P2_9, p2_9, Uart2, u2_rxd),
+    (P2_9, p2_9, Uart4, u4_rxd),
+    (P3_17, p3_17, Uart1, u1_rxd),
+    (P4_23, p4_23, Uart2, u2_rxd),
+    (P4_29, p4_29, Uart3, u3_rxd),
+    (P5_3, p5_3, Uart4, u4_rxd),
 );
 
 uart_tx!(
-    (P0_0, p0_0, u0_txd),
-    // (P0_0, p0_0, u3_txd),
-    (P0_2, p0_2, u0_txd),
-    // (P0_2, p0_2, u3_txd),
-    (P0_10, p0_10, u2_txd),
-    (P0_15, p0_15, u1_txd),
-    (P0_22, p0_22, u4_txd),
-    (P0_25, p0_25, u3_txd),
-    (P1_29, p1_29, u4_txd),
-    (P2_0, p2_0, u1_txd),
-    (P2_8, p2_8, u2_txd),
-    (P3_16, p3_16, u1_txd),
-    (P4_22, p4_22, u2_txd),
-    (P4_28, p4_28, u3_txd),
-    (P5_4, p5_4, u4_txd),
+    (P0_0, p0_0, Uart0, u0_txd),
+    (P0_0, p0_0, Uart3, u3_txd),
+    (P0_2, p0_2, Uart0, u0_txd),
+    (P0_2, p0_2, Uart3, u3_txd),
+    (P0_10, p0_10, Uart2, u2_txd),
+    (P0_15, p0_15, Uart1, u1_txd),
+    (P0_22, p0_22, Uart4, u4_txd),
+    (P0_25, p0_25, Uart3, u3_txd),
+    (P1_29, p1_29, Uart4, u4_txd),
+    (P2_0, p2_0, Uart1, u1_txd),
+    (P2_8, p2_8, Uart2, u2_txd),
+    (P3_16, p3_16, Uart1, u1_txd),
+    (P4_22, p4_22, Uart2, u2_txd),
+    (P4_28, p4_28, Uart3, u3_txd),
+    (P5_4, p5_4, Uart4, u4_txd),
 );
