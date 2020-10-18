@@ -11,11 +11,11 @@ use lpc178x_7x_hal::*;
 #[allow(unused_must_use)]
 fn main() -> ! {
     let hal = Hal::new();
-    let clock = hal.clock.enable(120_000_000, 12_000_000);
+    let _clock = hal.clock.enable(120_000_000, 12_000_000);
     let pins = hal.gpio0.split();
     let tx = pins.p0_2;
     let rx = pins.p0_3;
-    let mut uart = uart::Serial::new(hal.uart0, (rx, tx).into()).enable(&clock);
+    let mut uart = hal.uart0.enable(rx, tx);
     if let Ok(()) = nb::block!(uart.try_write(b'!')) {
         nb::block!(uart.try_flush());
         match nb::block!(uart.try_read()) {
