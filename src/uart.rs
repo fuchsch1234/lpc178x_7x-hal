@@ -1,4 +1,3 @@
-use crate::clock;
 use crate::gpio;
 use crate::typestates::{Disabled, Enabled, InitState, PinState};
 use core::convert::From;
@@ -15,6 +14,13 @@ pub trait UartRx<UART> {
 }
 pub trait UartTx<UART> {
     fn into_uarttx(&self);
+}
+
+pub struct UartConfig {
+    pub(crate) dll: u32,
+    pub(crate) dlm: u32,
+    pub(crate) mul: u8,
+    pub(crate) div: u8,
 }
 
 macro_rules! uarts {
@@ -67,7 +73,7 @@ macro_rules! uarts {
                 /// let rx = pins.p0_3;
                 /// let uart = hal.uart0.enable(rx, tx);
                 /// ```
-                pub fn enable<Rx, Tx>(self, rx: Rx, tx: Tx) -> $type<Enabled, Rx, Tx>
+                pub fn enable<Rx, Tx>(self, config: UartConfig, rx: Rx, tx: Tx) -> $type<Enabled, Rx, Tx>
                 where
                     Rx: UartRx<$type<Enabled, Rx, Tx>>,
                     Tx: UartTx<$type<Enabled, Rx, Tx>>,
@@ -80,9 +86,9 @@ macro_rules! uarts {
                     self._uart.fcr().write(|w| w.fifoen().set_bit());
                     self._uart.lcr.write(|w| w.wls()._8_bit_character_leng().dlab().set_bit());
                     unsafe {
-                        self._uart.dlm_mut().write(|w| w.bits(0));
-                        self._uart.dll_mut().write(|w| w.bits(34));
-                        self._uart.fdr.write(|w| w.mulval().bits(15).divaddval().bits(8));
+                        self._uart.dlm_mut().write(|w| w.bits(config.dlm));
+                        self._uart.dll_mut().write(|w| w.bits(config.dll));
+                        self._uart.fdr.write(|w| w.mulval().bits(config.mul).divaddval().bits(config.div));
                     }
 
                     self._uart.lcr.modify(|_, w| w.dlab().clear_bit());

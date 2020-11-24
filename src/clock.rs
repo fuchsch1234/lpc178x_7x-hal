@@ -1,7 +1,10 @@
 use crate::pac;
 use crate::typestates::{Disabled, Enabled, InitState};
+use crate::uart::UartConfig;
 use core::convert::TryInto;
 use core::marker::PhantomData;
+use core::ops::Shr;
+
 
 pub struct Clock<State: InitState> {
     _state: PhantomData<State>,
@@ -78,5 +81,30 @@ impl Clock<Disabled> {
 impl Clock<Enabled> {
     pub fn get_frequency(&self) -> i32 {
         self.cpu_freq
+    }
+
+    fn abs(a: f32) -> f32 { if a < 0f32 { -a } else { a } }
+
+    pub fn get_uart_config(&self, baudrate: i32) -> UartConfig {
+        let dl_est = self.cpu_freq as f32 / (16.0 * 1.5 * baudrate as f32);
+        let f_est = self.cpu_freq as f32 / (16.0 * dl_est * baudrate as f32);
+        let mut config = UartConfig {
+            dlm: (dl_est as u32).shr(8) & 0xFFu32,
+            dll: (dl_est as u32) & 0xFF,
+            mul: 2u8,
+            div: 1u8
+        };
+        let mut diff = 1000f32;
+        for d in 0..14 {
+            for m in 1..15 {
+                let dd = Clock::<Enabled>::abs(f_est - (1f32 + (d as f32) / (m as f32)));
+                if dd < diff {
+                    diff = dd;
+                    config.mul = m;
+                    config.div = d;
+                }
+            }
+        }
+        return config;
     }
 }
