@@ -2,7 +2,14 @@
 name = "lpc178x_7x-hal"
 version = "0.1.0"
 authors = ["cf <abtjh5q@hmamail.com>"]
+description = "HAL for the LPC177x/8x family of microcontrollers"
+categories = ["embedded-hal", "hardware-support", "no-std"]
+keywords = ["arm", "cortex-m", "lpc177x/8x", "hal"]
 edition = "2018"
+repository = "https://github.com/fuchsch1234/lpc178x_7x-hal"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-file = "LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
