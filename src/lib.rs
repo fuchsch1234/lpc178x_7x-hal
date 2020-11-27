@@ -1,13 +1,15 @@
 #![no_std]
 
-use crate::typestates::Disabled;
+use crate::typestates::{Disabled, NonPeriodic};
 pub use embedded_hal::digital::*;
 pub use embedded_hal::serial::*;
+pub use embedded_hal::timer::*;
 pub use lpc178x_7x as pac;
 pub use nb;
 
 pub mod clock;
 pub mod gpio;
+pub mod timer;
 mod typestates;
 pub mod uart;
 
@@ -24,6 +26,10 @@ pub struct Hal {
     pub uart2: uart::Uart2<Disabled>,
     pub uart3: uart::Uart3<Disabled>,
     pub uart4: uart::Uart4<Disabled>,
+    pub timer0: timer::Timer0<Disabled, NonPeriodic>,
+    pub timer1: timer::Timer1<Disabled, NonPeriodic>,
+    pub timer2: timer::Timer2<Disabled, NonPeriodic>,
+    pub timer3: timer::Timer3<Disabled, NonPeriodic>,
 }
 
 impl Hal {
@@ -42,6 +48,10 @@ impl Hal {
             uart2: _peripherals.UART2.into(),
             uart3: _peripherals.UART3.into(),
             uart4: _peripherals.UART4.into(),
+            timer0: _peripherals.TIMER0.into(),
+            timer1: _peripherals.TIMER1.into(),
+            timer2: _peripherals.TIMER2.into(),
+            timer3: _peripherals.TIMER3.into(),
         }
     }
 }

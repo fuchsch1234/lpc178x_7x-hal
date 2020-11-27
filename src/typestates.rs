@@ -23,6 +23,16 @@ pub struct Gpio<D: Direction> {
 impl<D> sealed::Sealed for Gpio<D> where D: Direction {}
 impl<D> PinState for Gpio<D> where D: Direction {}
 
+pub trait TimerType: sealed::Sealed {}
+
+pub struct Periodic;
+impl sealed::Sealed for Periodic {}
+impl TimerType for Periodic {}
+
+pub struct NonPeriodic;
+impl sealed::Sealed for NonPeriodic {}
+impl TimerType for NonPeriodic {}
+
 pub mod gpio {
     pub mod direction {
         pub trait Direction: crate::typestates::sealed::Sealed {}

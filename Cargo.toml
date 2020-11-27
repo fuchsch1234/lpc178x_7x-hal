@@ -16,6 +16,7 @@ license-file = "LICENSE"
 [dependencies]
 lpc178x_7x = { git = "https://github.com/fuchsch1234/lpc178x_7x", branch = "master" }
 embedded-hal = "1.0.0-alpha.1"
+embedded-time = "0.10.1"
 nb = "1.0.0"
 
 [dev-dependencies]
