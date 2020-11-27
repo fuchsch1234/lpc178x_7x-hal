@@ -13,12 +13,21 @@ WIP!
 
 Implemented peripherals:
 
+* Clock
 * GPIO
+* Uart
 
 In progress:
 
-* Clock
-* Uart
+* Timer
+
+## Usage
+
+Usage examples of peripherals and how to instantiate the HAL object can be found under `examples`.
+
+* `examples/clock.rs` shows how to initialize the MCU clock to a fixed frequency.
+* `examples/serial.rs` shows how to use the MCU's UART interface to transmit data.
+* `examples/timer.rs` shows how to use a timer to delay execution for a configurable time.
 
 ## PAC
 
